@@ -1,0 +1,131 @@
+\documentclass{article}
+\usepackage[UTF8]{ctex}
+
+\usepackage{booktabs}   % 三线表
+\usepackage{tabularx}   % 自动列宽
+\usepackage{geometry}   % 调整页边距
+\geometry{a4paper, margin=1in}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
+\usepackage{trees}
+\usepackage{amsmath}
+
+\begin{document}
+
+\begin{table}[htbp]
+\centering
+\caption{代码模块及其功能详细说明表}
+\label{tab:module_functions}
+\begin{tabularx}{\textwidth}{l l c X}
+\toprule
+\textbf{模块名称} & \textbf{函数/方法} & \textbf{类型} & \textbf{功能说明} \\
+\midrule
+\textbf{models.py} & ModelsDic & 辅助 & 建立模型名称字符串与类实体的映射字典 \\
+ & \_\_init\_\_ & 辅助 & 根据字符串参数动态选择并实例化对应模型类 \\
+ & show\_list & 辅助 & 返回系统当前所有可用的模型名称列表 \\
+\midrule
+\textbf{base\_model.py} & \_\_init\_\_ & 辅助 & 初始化数据加载器、路径、权重文件及日志对象 \\
+ & init\_model & 计算 & \textbf{抽象方法}：定义模型初始化接口，由子类实现 \\
+ & get\_log\_header & 辅助 & 获取并返回训练日志文件的表头信息 \\
+ & load\_state\_dict & 辅助 & 加载预训练模型权重参数 \\
+ & fit\_anomaly\_score & 计算 & 执行验证集前向传播，保存原始异常分数分布 \\
+ & calc\_threshold & 计算 & 基于分位数（Percentile）计算异常判断决策阈值 \\
+ & train / test & 计算 & \textbf{抽象方法}：定义标准的训练与测试流水线 \\
+\midrule
+\textbf{dcase2023t2} & \_\_init\_\_ & 辅助 & 调用父类初始化并配置具体的优化器参数 \\
+\textbf{\_cnn\_svdd.py} & init\_model & 计算 & 实例化 CNNNet 基础网络结构 \\
+ & loss\_fn & 计算 & 调用 SVDD 损失函数计算逻辑 \\
+ & train & 计算 & 核心训练循环：前向传播、损失更新及 Center 计算 \\
+ & test & 计算 & 推理评价循环：异常分数计算、CSV 导出及 AUC 评估 \\
+\midrule
+\textbf{network.py} & CNNNet.\_\_init\_\_ & 计算 & 定义 CNN 特征提取层架构并初始化 Center 参数 \\
+ & CNNNet.forward & 计算 & 将输入数据映射为潜在空间（Latent Space）特征向量 \\
+\midrule
+\textbf{svdd.py} & SVDDLoss.forward & 计算 & 类方式实现：计算 Latent 特征到 Center 的距离损失 \\
+ & svdd\_loss & 计算 & 函数方式实现：计算欧氏距离相关的 SVDD 损失 \\
+ & calc\_svdd\_score & 计算 & \textbf{核心计算}：通过特征与中心距离的平方和确定异常分数 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.8cm,
+        box/.style={rectangle, draw, text width=10cm, align=left, font=\small, minimum height=0.8cm},
+        arrow/.style={-Stealth, thick}
+    ]
+
+    % --- 训练阶段 ---
+    \node (t1) [box] {\textbf{训练阶段 (Training)} \\ DataLoader $\to$ data: (batch, 1, 128, 5)};
+    \node (t2) [box, below=of t1] {CNNNet.forward(data) \\ $\to$ Output: $z = (\text{batch}, 8)$ \hfill $\leftarrow$ 潜在特征向量};
+    \node (t3) [box, below=of t2] {svdd\_loss(z, center) \hfill $\leftarrow$ center 初始化为 0 \\ Input: $z=(\text{batch},8)$, center=0 \\ Output: loss = scalar \hfill $\leftarrow$ 用于反向传播更新 CNN 参数};
+
+    % --- 计算 Center ---
+    \node (c1) [box, below=1.2cm of t3, line width=1.2pt] {\textbf{最后一个 Epoch: 计算 Center (epoch == epochs+1)} \\ 1. 收集所有训练样本的 $z$ \\ 2. center = mean($z_{all}$) \hfill $\leftarrow$ 训练数据 latent 特征均值 \\ 3. self.model.center.data = center \hfill $\leftarrow$ 固定到模型中};
+
+    % --- 测试阶段 ---
+    \node (s1) [box, below=1.2cm of c1] {\textbf{测试阶段 (Testing)} \\ data: (batch, 1, 128, 5) $\to$ CNNNet.forward(data) $\to z$: (batch, 8)};
+    \node (s2) [box, below=of s1] {calc\_svdd\_score(z, center) \hfill $\leftarrow$ 使用训练好的 center \\ Input: $z=(\text{batch},8)$, center=(8,) \\ Output: scores = (batch,) \hfill $\leftarrow$ 样本到 center 的欧氏距离平方};
+    \node (s3) [box, below=of s2, text width=8cm, align=center] {scores $>$ threshold $\to$ 异常 / scores $\le$ threshold $\to$ 正常};
+
+    % 连线
+    \draw [arrow] (t1) -- (t2);
+    \draw [arrow] (t2) -- (t3);
+    \draw [arrow] (t3) -- (c1);
+    \draw [arrow] (c1) -- (s1);
+    \draw [arrow] (s1) -- (s2);
+    \draw [arrow] (s2) -- (s3);
+
+    % 侧边标注 (固定对齐)
+    \node [left=0.6cm of t2, rotate=90, font=\bfseries] {训练阶段};
+    \node [left=0.6cm of c1, rotate=90, font=\bfseries] {计算中心};
+    \node [left=0.6cm of s2, rotate=90, font=\bfseries] {测试阶段};
+
+    \end{tikzpicture}
+    \caption{SVDD 完整逻辑流程：训练、中心计算与测试}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.8cm and 1.2cm,
+        box/.style={rectangle, draw, text width=5.5cm, align=left, font=\footnotesize, minimum height=0.7cm},
+        title/.style={rectangle, draw, font=\small\bfseries, text width=3.5cm, align=center},
+        arrow/.style={-Stealth, thick}
+    ]
+
+    % --- 初始化阶段 ---
+    \node (entry) [title] {train.py (入口)};
+    \node (models) [box, below=of entry] {models.py :: Models() \\ \textit{模型映射与实例化}};
+    \node (dcase) [box, below=of models] {dcase2023t2\_cnn\_svdd.py \\ \textit{DCASE2023T2CNNSVDD 构造函数}};
+    
+    \node (base) [box, right=of dcase] {base\_model.py :: BaseModel.\_\_init\_\_() \\ \textit{数据加载、目录创建、Checkpoint}};
+    \node (initm) [box, below=0.5cm of base] {dcase...py :: init\_model() \\ \textit{实例化网络结构}};
+    \node (net) [box, below=0.5cm of initm] {network.py :: CNNNet \\ \textit{定义结构并初始化可学习 center (dim=8)}};
+
+    \draw [arrow] (entry) -- (models);
+    \draw [arrow] (models) -- (dcase);
+    \draw [arrow] (dcase.east) -- (base.west);
+    \draw [arrow] (dcase.east) -- (initm.west);
+    \draw [arrow] (initm) -- (net);
+
+    % --- 运行循环 (平铺布局，不再使用嵌套tikzpicture) ---
+    \node (train) [box, below=3.5cm of dcase, text width=5cm] {\textbf{train(epoch)} \\ 1. self.model(data) $\to$ z \\ 2. loss\_fn(z, center) \\ 3. calc\_svdd\_score(z)};
+    
+    \node (test) [box, right=of train, text width=5cm] {\textbf{test()} \\ 1. self.model(data) $\to$ z \\ 2. calc\_svdd\_score(z) \\ 3. Save CSV \& Calc AUC};
+    
+    \node (svdd) [box, below=1cm of $(train.south)!0.5!(test.south)$, text width=6cm, align=center] {svdd.py :: \\ \textit{svdd\_loss() / calc\_svdd\_score()}};
+
+    \draw [arrow] (train.south) -- (svdd.north);
+    \draw [arrow] (test.south) -- (svdd.north);
+
+    % --- 阶段标注 ---
+    \node [left=0.6cm of dcase, rotate=90, font=\bfseries] {初始化};
+    \node [left=0.6cm of train, rotate=90, font=\bfseries] {运行循环};
+
+    \end{tikzpicture}
+    \caption{代码调用关系与运行逻辑图 (纯净版)}
+\end{figure}
+
+\end{document}
