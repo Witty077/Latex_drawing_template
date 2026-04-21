@@ -132,4 +132,31 @@
     \caption{代码调用关系与运行逻辑图 (纯净版)}
 \end{figure}
 
+\begin{table}[H]
+\centering
+\caption{+Womersley 宏包及 private 文件夹清单}
+\label{tab:womersley_list}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{层级} & \textbf{序号} & \textbf{文件名} \\
+\midrule
+\textbf{Package 根目录} & 1 & TimeWarpingToPeriodic.m \\
+& 2 & WomersleyNumberEstimation.m \\
+\midrule
+\textbf{private 文件夹} & 3 & DEBUGvisualizeDCFit.m \\
+& 4 & calculateFitPrecisionMetrics.m \\
+& 5 & calculateHarmonicMetrics.m \\
+& 6 & calculateKFactor.m \\
+& 7 & calculateSegmentDerivedMetrics.m \\
+& 8 & calculateSymbols.m \\
+& 9 & calculateWomersleyQC.m \\
+& 10 & createGaussianPSFKernel.m \\
+& 11 & extractHarmonicProfile.m \\
+& 12 & getFitParamsStruct.m \\
+& 13 & plotWomersley.m \\
+& 14 & updateStruct.m \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
 \end{document}
